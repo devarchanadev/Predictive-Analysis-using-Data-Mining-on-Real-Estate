@@ -1,0 +1,157 @@
+---
+title: "Statistical data mining on real estate data"
+output: html_document
+date: "2023-08-28"
+---
+
+# AIM OF THIS PROJECT IS TO APPLY DATA MINING CONCEPTS TO DERIVE INSIGHTS ON REAL-ESTATE DATA
+
+We are considering the real-estate data which is available in Kaggle. After studying the data, I have decided to apply to best, forward, and backwards subset selection to the real estate data. Then I shall compare the performance of the methods, and the variables that were selected in the “optimal models” using test/training, BIC and Cp.
+
+The benefit of doing this is that we can decide the best model and then scale this project to a larger dataset which can be useful for any organization involved in real-estate
+
+```{r}
+library(leaps)
+setwd("C:/Users/devar/OneDrive/Documents")
+Realestate <- read.delim("Real estate.csv", sep = ",", header = TRUE)
+head(Realestate)
+
+Realestate <- Realestate[-1]
+dim(Realestate)
+
+colnames(Realestate)
+colnames(Realestate) <- c("Trans.date", "House.Age", "Dist.2.Transp", "No.stores", "Lat", "Long", "PriceUnit")
+
+regfit.full <- regsubsets(House.Age~., data = Realestate, nbest = 1, nvmax = 6, method = "exhaustive")
+
+my_sum <- summary(regfit.full)
+my_sum
+names(my_sum)
+
+par(mfrow = c(2,2))
+plot(my_sum$cp, xlab = "No. of variables", ylab = "Cp", type = "l")
+plot(my_sum$bic, xlab = "No. of variables", ylab = "BIC", type = "l")
+
+which(my_sum$cp == min(my_sum$cp))
+which(my_sum$bic == min(my_sum$bic))
+
+regfit.fwd <- regsubsets(House.Age~., data = Realestate, nbest = 1, nvmax = 6, method = "forward")
+regfit.bwd <- regsubsets(House.Age~., data = Realestate, nbest = 1, nvmax = 6, method = "backward")
+
+my_sum_fwd <- summary(regfit.fwd)
+my_sum_fwd
+my_sum_bwd <- summary(regfit.bwd)
+my_sum_bwd
+
+par(mfrow = c(2,2))
+plot(my_sum_fwd$cp, xlab = "No. of variables", ylab = "Cp", type = "l", main = "Forward Method")
+plot(my_sum_fwd$bic, xlab = "No. of variables", ylab = "BIC", type = "l", main = "Forward Method")
+plot(my_sum_bwd$cp, xlab = "No. of variables", ylab = "Cp", type = "l", main = "Backward Method")
+plot(my_sum_bwd$bic, xlab = "No. of variables", ylab = "BIC", type = "l", main = "Backward Method")
+
+##Upon comparing, we see that the plots of cp and bic are almost identical for all the methods, exhaustive, forward and backward.
+
+which(my_sum_fwd$cp == min(my_sum_fwd$cp))
+which(my_sum_fwd$bic == min(my_sum_fwd$bic))
+
+which(my_sum_bwd$cp == min(my_sum_bwd$cp))
+which(my_sum_bwd$bic == min(my_sum_bwd$bic))
+
+#Comparing the optimal models, values are same through all the three methods. Min for both cp and bic is 3.
+
+my_sum_fwd$outmat
+my_sum_bwd$outmat
+
+#outmat of backward and forward are same.
+
+coef(regfit.full, 3)
+coef(regfit.fwd, 3)
+coef(regfit.bwd, 3)
+
+#coefficients of all the three methods are same so we can select any of it for the test and training methods. So we shall select forward method at random.
+
+#Now looking at it using test and training data
+
+predict.regsubsets = function(object, newdata, id){
+    form = as.formula(object$call[[2]])
+    mat = model.matrix(form, newdata)
+    coefi = coef(object,id=id)
+    xvars=names(coefi)
+    mat[,xvars]%*%coefi
+}
+
+set.seed(123)
+train_indis <- sample(c(1:length(Realestate[,1])), size = round(2/3*length(Realestate[,1])), replace = FALSE)
+train = Realestate[train_indis, ]
+test = Realestate[-train_indis, ]
+y_true_train = train$House.Age
+y_true_test = test$House.Age
+train_err_store <- matrix(rep(NA, 6))
+test_err_store <- matrix(rep(NA, 6))
+regfit.fwd <- regsubsets(House.Age~., data = Realestate, nbest = 1, nvmax = 6, method = "forward")
+i = 1
+for (i in 1:6){
+  y_hat_train = predict(regfit.fwd, newdata = train, id = i)
+    y_hat_test = predict(regfit.fwd, newdata = test, id = i)
+    
+    train_err_store[i] = (1/length(y_true_train))*sum((y_true_train-y_hat_train)^2)
+    test_err_store[i] = (1/length(y_true_test))*sum((y_true_test-y_hat_test)^2)
+}
+
+plot(train_err_store, col = "green", type = "b", xlab = "No. of variables", ylab = "MSE", ylim = c(100,130))
+lines(test_err_store, col = "red", type = "b")
+which(test_err_store == min(test_err_store))
+```
+
+
+
+
+# Data Loading and Preparation
+I began by loading the real estate dataset and performing some initial cleaning:
+
+# I removed unnecessary columns that wouldn't contribute to the analysis.
+I renamed the variables to make them more descriptive and easier to work with in subsequent analyses.
+
+# Subset Selection Methods
+Next, I applied three subset selection methods—exhaustive, forward, and backward—to identify the best combination of predictors for house age. These methods evaluate multiple models and choose the ones that perform best according to certain criteria.
+
+# Model Comparison Using Cp and BIC
+For each method, I generated models with varying numbers of predictors (from 1 to 6). I then compared these models using two key metrics:
+
+Mallows' Cp: Helps in identifying models with a good balance between bias and variance.
+Bayesian Information Criterion (BIC): Used for model selection, penalizing models with more parameters to avoid overfitting.
+I plotted these metrics to visualize how each model performed as the number of predictors increased.
+
+# Findings: Consistency Across Methods
+Upon comparing the models generated by the exhaustive, forward, and backward selection methods, I observed that the plots of Mallows' Cp and BIC were almost identical for all three methods. This indicated a high level of consistency in the model selection process.
+
+When I compared the optimal models selected by each method, I found that the minimum values for both Cp and BIC corresponded to models with three predictors. This result was consistent across all three methods—exhaustive, forward, and backward.
+
+Additionally, the output matrices (outmat) for the forward and backward methods were identical, further confirming the consistency. The coefficients of the selected models were also the same across all methods, allowing me to confidently choose any method for further analysis. I selected the forward method at random to proceed with the test and training data analysis.
+
+# Choosing the Forward Selection Method
+Given the consistency across methods, I decided to proceed with the forward selection method for further analysis. This method was chosen at random since all methods produced similar results in terms of model selection.
+
+# Training and Testing: Model Validation
+I then split the data into training and testing sets to validate the model's predictive performance. Using the forward selection method, I fitted models with different numbers of predictors on the training data and evaluated their performance on the testing data.
+
+# Model Evaluation: Mean Squared Error (MSE)
+I calculated the Mean Squared Error (MSE) for both the training and testing sets across models with different numbers of predictors. By plotting the MSE values, I was able to visualize how the model's performance varied with the number of predictors and identify the model with the lowest test set MSE.
+
+# Conclusion: Identifying the Best Model
+In the subsequent analysis using test and training data, I found that the model with three predictors also produced the minimum test error, consistent with the results from the optimal models identified earlier. This confirms that the models selected by all three methods are indeed optimal.
+
+# By summarizing all the comparisons:
+
+The Cp and BIC plots were almost identical across methods.
+The optimal models consistently included three predictors.
+The coefficients and output matrices were the same across methods.
+Given these findings, I concluded that any of the subset selection methods could be used to select the optimal model. This model can be effectively scaled to larger datasets and applied in real-world scenarios within the real estate industry.
+
+
+
+
+
+
+
+
